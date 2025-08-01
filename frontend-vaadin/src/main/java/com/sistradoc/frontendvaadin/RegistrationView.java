@@ -11,8 +11,10 @@ import com.vaadin.flow.component.timepicker.TimePicker;
 import com.vaadin.flow.component.upload.Upload;
 import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.PageTitle;
 
-@Route("") // Mapear esta vista a la ruta raíz
+@Route("register")
+@PageTitle("Registro | Sistradoc")
 public class RegistrationView extends VerticalLayout {
 
     public RegistrationView() {
@@ -65,18 +67,27 @@ public class RegistrationView extends VerticalLayout {
                 body.add("ubicacion", ubicacion.getValue());
                 body.add("observacion", observacion.getValue());
 
-                org.springframework.web.reactive.function.client.WebClient client = org.springframework.web.reactive.function.client.WebClient.create("http://localhost:8080");
+                getUI().ifPresent(ui -> ui.getPage().executeJs("return sessionStorage.getItem('jwt')")
+                    .then(String.class, token -> {
+                        if (token == null || token.isEmpty()) {
+                            ui.access(() -> com.vaadin.flow.component.notification.Notification.show("Error: No autenticado. Por favor, inicie sesión."));
+                            ui.navigate("login");
+                            return;
+                        }
 
-                client.post()
-                    .uri("/api/documents/upload")
-                    .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
-                    .body(org.springframework.web.reactive.function.BodyInserters.fromMultipartData(body))
-                    .retrieve()
-                    .toBodilessEntity()
-                    .subscribe(
-                        response -> getUI().ifPresent(ui -> ui.access(() -> com.vaadin.flow.component.notification.Notification.show("Expediente registrado con éxito."))),
-                        error -> getUI().ifPresent(ui -> ui.access(() -> com.vaadin.flow.component.notification.Notification.show("Error al registrar: " + error.getMessage())))
-                    );
+                        org.springframework.web.reactive.function.client.WebClient client = org.springframework.web.reactive.function.client.WebClient.create("http://localhost:8080");
+                        client.post()
+                            .uri("/api/documents/upload")
+                            .header(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
+                            .body(org.springframework.web.reactive.function.BodyInserters.fromMultipartData(body))
+                            .retrieve()
+                            .toBodilessEntity()
+                            .subscribe(
+                                response -> ui.access(() -> com.vaadin.flow.component.notification.Notification.show("Expediente registrado con éxito.")),
+                                error -> ui.access(() -> com.vaadin.flow.component.notification.Notification.show("Error al registrar: " + error.getMessage()))
+                            );
+                    }));
 
             } catch (java.io.IOException ex) {
                 com.vaadin.flow.component.notification.Notification.show("Error al leer el archivo: " + ex.getMessage());
